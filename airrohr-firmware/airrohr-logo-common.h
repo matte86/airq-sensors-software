@@ -5,6 +5,8 @@
 // optipng -o7 -zm1-9 -strip all <logo.png>
 // reduces size from 1255 to 632 bytes.
 
+#include <pgmspace.h>
+
 constexpr const unsigned int LUFTDATEN_INFO_LOGO_PNG_SIZE = 632;
 
 const char LUFTDATEN_INFO_LOGO_PNG[] PROGMEM = {

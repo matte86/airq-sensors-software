@@ -7,6 +7,8 @@
  *	Texts should be as short as possible
  */
 
+#include <pgmspace.h>
+
 #define INTL_LANG "EN"
 #define INTL_PM_SENSOR "Particulate matter sensor"
 const char INTL_CONFIGURATION[] PROGMEM = "Configuration";

@@ -20,15 +20,12 @@
  ************************************************************************
  */
 
-#include <WString.h>
-
-#include "./intl.h"
-#include "./utils.h"
-#include "./defines.h"
-#include "./ext_def.h"
+#include "intl.h"
+#include "utils.h"
+#include "defines.h"
+#include "ext_def.h"
 
 #include "ca-root.h"
-
 
 /*****************************************************************
  * aircms.online helper functions                                *
@@ -37,7 +34,7 @@ String sha1Hex(const String& s) {
 	char sha1sum_output[20];
 
 #if defined(ESP8266)
-	br_sha1_context sc;
+	br_sha1_context sc;x
 
 	br_sha1_init(&sc);
 	br_sha1_update(&sc, s.c_str(), s.length());
@@ -216,7 +213,7 @@ bool launchUpdateLoader(const String& md5) {
  *****************************************************************/
 String check_display_value(double value, double undef, uint8_t len, uint8_t str_len) {
 	RESERVE_STRING(s, 15);
-	s = (value != undef ? String(value, len) : String("-"));
+	s = (value != undef ? String(value, static_cast<unsigned int>(len)) : String("-"));
 	while (s.length() < str_len) {
 		s = " " + s;
 	}
