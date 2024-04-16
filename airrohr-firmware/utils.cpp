@@ -34,7 +34,7 @@ String sha1Hex(const String& s) {
 	char sha1sum_output[20];
 
 #if defined(ESP8266)
-	br_sha1_context sc;x
+	br_sha1_context sc;
 
 	br_sha1_init(&sc);
 	br_sha1_update(&sc, s.c_str(), s.length());
