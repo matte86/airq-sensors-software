@@ -87,13 +87,21 @@ String SOFTWARE_VERSION(SOFTWARE_VERSION_STR);
 #include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 #include <HardwareSerial.h>
+#if ESP_IDF_VERSION_MAJOR >= 4
+#if ( ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(1, 0, 6) )
+	#include "sha/sha_parallel_engine.h"
+#else
+	#include <esp32/sha.h>
+#endif  
+#else
 #include <hwcrypto/sha.h>
+#endif
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #endif
 
 // includes common to ESP8266 and ESP32 (especially external libraries)
-#include "./oledfont.h" // avoids including the default Arial font, needs to be included before SSD1306.h
+#include "oledfont.h"				// avoids including the default Arial font, needs to be included before SSD1306.h
 #include <SSD1306.h>
 #include <SH1106.h>
 #include <LiquidCrystal_I2C.h>
@@ -102,7 +110,7 @@ String SOFTWARE_VERSION(SOFTWARE_VERSION_STR);
 #define ARDUINOJSON_DECODE_UNICODE 0
 #include <ArduinoJson.h>
 #include <DNSServer.h>
-#include "./DHT.h"
+#include "DHT.h"
 #include <Adafruit_HTU21DF.h>
 #include <Adafruit_BMP085.h>
 #include <Adafruit_SHT31.h>
@@ -110,13 +118,13 @@ String SOFTWARE_VERSION(SOFTWARE_VERSION_STR);
 #include <DallasTemperature.h>
 #include <SparkFun_SCD30_Arduino_Library.h>
 #include <TinyGPS++.h>
-#include "./bmx280_i2c.h"
-#include "./sps30_i2c.h"
-#include "./dnms_i2c.h"
+#include "bmx280_i2c.h"
+#include "sps30_i2c.h"
+#include "dnms_i2c.h"
 
-#include "./intl.h"
+#include "intl.h"
 
-#include "./utils.h"
+#include "utils.h"
 #include "defines.h"
 #include "ext_def.h"
 #include "html-content.h"
@@ -1067,16 +1075,62 @@ static String IPS_version_date()
 }
 
 /*****************************************************************
+ * write config to spiffs                                        *
+ *****************************************************************/
+static bool writeConfig() {
+	DynamicJsonDocument json(JSON_BUFFER_SIZE);
+	debug_outln_info(F("Saving config..."));
+	json["SOFTWARE_VERSION"] = SOFTWARE_VERSION;
+
+	for (unsigned e = 0; e < sizeof(configShape)/sizeof(configShape[0]); ++e) {
+		ConfigShapeEntry c;
+		memcpy_P(&c, &configShape[e], sizeof(ConfigShapeEntry));
+		switch (c.cfg_type) {
+		case Config_Type_Bool:
+			json[c.cfg_key()].set(*c.cfg_val.as_bool);
+			break;
+		case Config_Type_UInt:
+		case Config_Type_Time:
+			json[c.cfg_key()].set(*c.cfg_val.as_uint);
+			break;
+		case Config_Type_Password:
+		case Config_Type_String:
+			json[c.cfg_key()].set(c.cfg_val.as_str);
+			break;
+		};
+	}
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored  "-Wdeprecated-declarations"
+
+	SPIFFS.remove(F("/config.json.old"));
+	SPIFFS.rename(F("/config.json"), F("/config.json.old"));
+
+	File configFile = SPIFFS.open(F("/config.json"), "w");
+	if (configFile) {
+		serializeJson(json, configFile);
+		configFile.close();
+		debug_outln_info(F("Config written successfully."));
+	} else {
+		debug_outln_error(F("failed to open config file for writing"));
+		return false;
+	}
+
+#pragma GCC diagnostic pop
+
+	return true;
+}
+
+/*****************************************************************
  * disable unneeded NMEA sentences, TinyGPS++ needs GGA, RMC     *
  *****************************************************************/
-static void disable_unneeded_nmea()
-{
-	serialGPS->println(F("$PUBX,40,GLL,0,0,0,0*5C")); // Geographic position, latitude / longitude
-													  //	serialGPS->println(F("$PUBX,40,GGA,0,0,0,0*5A"));       // Global Positioning System Fix Data
-	serialGPS->println(F("$PUBX,40,GSA,0,0,0,0*4E")); // GPS DOP and active satellites
-													  //	serialGPS->println(F("$PUBX,40,RMC,0,0,0,0*47"));       // Recommended minimum specific GPS/Transit data
-	serialGPS->println(F("$PUBX,40,GSV,0,0,0,0*59")); // GNSS satellites in view
-	serialGPS->println(F("$PUBX,40,VTG,0,0,0,0*5E")); // Track made good and ground speed
+static void disable_unneeded_nmea() {
+	serialGPS->println(F("$PUBX,40,GLL,0,0,0,0*5C"));       // Geographic position, latitude / longitude
+//	serialGPS->println(F("$PUBX,40,GGA,0,0,0,0*5A"));       // Global Positioning System Fix Data
+	serialGPS->println(F("$PUBX,40,GSA,0,0,0,0*4E"));       // GPS DOP and active satellites
+//	serialGPS->println(F("$PUBX,40,RMC,0,0,0,0*47"));       // Recommended minimum specific GPS/Transit data
+	serialGPS->println(F("$PUBX,40,GSV,0,0,0,0*59"));       // GNSS satellites in view
+	serialGPS->println(F("$PUBX,40,VTG,0,0,0,0*5E"));       // Track made good and ground speed
 }
 
 /*****************************************************************
@@ -1242,59 +1296,6 @@ static void init_config()
 		return;
 	}
 	readConfig();
-}
-
-/*****************************************************************
- * write config to spiffs                                        *
- *****************************************************************/
-static bool writeConfig()
-{
-	DynamicJsonDocument json(JSON_BUFFER_SIZE);
-	debug_outln_info(F("Saving config..."));
-	json["SOFTWARE_VERSION"] = SOFTWARE_VERSION;
-
-	for (unsigned e = 0; e < sizeof(configShape) / sizeof(configShape[0]); ++e)
-	{
-		ConfigShapeEntry c;
-		memcpy_P(&c, &configShape[e], sizeof(ConfigShapeEntry));
-		switch (c.cfg_type)
-		{
-		case Config_Type_Bool:
-			json[c.cfg_key()].set(*c.cfg_val.as_bool);
-			break;
-		case Config_Type_UInt:
-		case Config_Type_Time:
-			json[c.cfg_key()].set(*c.cfg_val.as_uint);
-			break;
-		case Config_Type_Password:
-		case Config_Type_String:
-			json[c.cfg_key()].set(c.cfg_val.as_str);
-			break;
-		};
-	}
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-
-	SPIFFS.remove(F("/config.json.old"));
-	SPIFFS.rename(F("/config.json"), F("/config.json.old"));
-
-	File configFile = SPIFFS.open(F("/config.json"), "w");
-	if (configFile)
-	{
-		serializeJson(json, configFile);
-		configFile.close();
-		debug_outln_info(F("Config written successfully."));
-	}
-	else
-	{
-		debug_outln_error(F("failed to open config file for writing"));
-		return false;
-	}
-
-#pragma GCC diagnostic pop
-
-	return true;
 }
 
 /*****************************************************************
@@ -1900,8 +1901,7 @@ static void webserver_config_send_body_post(String &page_content)
 	page_content = emptyString;
 }
 
-static void webserver_config()
-{
+static void webserver_config() {
 	if (!webserver_request_auth())
 	{
 		return;
@@ -2653,6 +2653,23 @@ static void webserver_metrics_endpoint()
 }
 
 /*****************************************************************
+ * Webserver page not found                                      *
+ *****************************************************************/
+static void webserver_not_found() {
+	last_page_load = millis();
+	debug_outln_info(F("ws: not found ..."));
+	if (WiFi.status() != WL_CONNECTED) {
+		if ((server.uri().indexOf(F("success.html")) != -1) || (server.uri().indexOf(F("detect.html")) != -1)) {
+			server.send(200, FPSTR(TXT_CONTENT_TYPE_TEXT_HTML), FPSTR(WEB_IOS_REDIRECT));
+		} else {
+			sendHttpRedirect();
+		}
+	} else {
+		server.send(404, FPSTR(TXT_CONTENT_TYPE_TEXT_PLAIN), F("Not found."));
+	}
+}
+
+/*****************************************************************
  * Webserver Images                                              *
  *****************************************************************/
 
@@ -2917,7 +2934,9 @@ static void waitForWifiToConnect(int maxRetries)
  * WiFi auto connecting script                                   *
  *****************************************************************/
 
+#if defined(ESP8266)
 static WiFiEventHandler disconnectEventHandler;
+#endif
 
 static void connectWifi()
 {
@@ -5391,7 +5410,7 @@ static void init_display()
 	// modifying the I2C speed to 400k, which overwhelms some of the
 	// sensors.
 	Wire.setClock(100000);
-	Wire.setClockStretchLimit(150000);
+	Wire.setTimeout(150000);
 }
 
 /*****************************************************************

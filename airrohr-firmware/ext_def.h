@@ -151,13 +151,13 @@ static const char MEASUREMENT_NAME_INFLUX[] PROGMEM = "feinstaub";
 //  === pin assignments for dev kit board ===================================
 #ifdef ESP32
 #define ONEWIRE_PIN D32
-#define PM_SERIAL_RX D27
-#define PM_SERIAL_TX D33
+#define PM_SERIAL_RX D27 // D1 in ESP8266
+#define PM_SERIAL_TX D33 // D2 in ESP8266
 #define PIN_CS D13
 
 #if defined(FLIP_I2C_PMSERIAL) // exchange the pins of the ports to use external i2c connector for gps
-#define I2C_PIN_SCL D23
-#define I2C_PIN_SDA D19
+#define I2C_PIN_SCL D23 // D4 in ESP8266
+#define I2C_PIN_SDA D19 // D3 in ESP8266
 #define GPS_SERIAL_RX D22
 #define GPS_SERIAL_TX D21
 #else

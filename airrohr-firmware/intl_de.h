@@ -8,6 +8,8 @@
  *	Texts should be as short as possible
  */
 
+#include <pgmspace.h>
+
 #define INTL_LANG "DE"
 #define INTL_PM_SENSOR "Feinstaubsensor"
 const char INTL_CONFIGURATION[] PROGMEM = "Konfiguration";
